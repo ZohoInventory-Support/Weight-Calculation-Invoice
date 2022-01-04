@@ -1,0 +1,90 @@
+
+// This CF will update the invoice with calculated weight fields once after the invoice is created
+//  Calculate the weight per line item based on quantity and total weight of the package 
+//*************************************************************************************************
+/* 
+Create 2 custom field in the item module 
+------------------------------------------
+1.Weight Per Item( API Field Name: cf_weight_per_item) - Filled manually
+2.Overall Weight( API Field Name: cf_overall_weight) - To calculate and update the overall weight based on quantity mentioned in invoice
+-------------------------------------------
+Create 1 custom field in the invoice module 
+---------------------------------------------
+1.Total Weight( API Field Name: cf_total) - To calculate and update the package weight
+*/
+
+//get the required ID's
+invoiceID = invoice.get("invoice_id");
+custID = invoice.get("customer_id");
+organizationID = organization.get("organization_id");
+
+//Get the line Items in the created invoice 
+invoicelineitems = Map();
+invoicelineitems = invoice.get("line_items");
+
+//For each line item get the quantity and weight per item to calculate the overall weight per line item
+line_items = List();
+Total_weight = 0;
+for each  i in invoicelineitems
+{
+	//get the quantity
+	quantity = i.get("quantity");
+	//get the weight per item from Item level custom field
+	custom_fld = Map();
+	custom_fld = i.get("item_custom_fields");
+	for each  j in custom_fld
+	{
+		if(j.get("placeholder") == "cf_weight_per_item")
+		{
+			info "weight per item";
+			wt_per_item = j.get("value");
+			info wt_per_item;
+		}
+	}
+	overall_wt = quantity * wt_per_item;
+	linecfmap = Map();
+	linecfmap.put("label","Overall Weight");
+	linecfmap.put("value",overall_wt);
+	cfmaplist = List();
+	cfmaplist.add(linecfmap);
+	each_line_item = Map();
+	each_line_item.put("line_item_id",i.get("line_item_id"));
+	each_line_item.put("salesorder_item_id",i.get("salesorder_item_id"));
+	each_line_item.put("item_custom_fields",cfmaplist);
+	line_items.add(each_line_item);
+	Total_weight = Total_weight + overall_wt;
+}
+info Total_weight;
+customfields = invoice.get("custom_fields");
+info customfields;
+for each k in customfields
+{
+	if(k.get("label") == "Total Weight")
+	{
+		customfieldID = k.get("customfield_id");
+		info k.get("label");
+	}
+}
+cfmap = Map();
+cfmap.put("value",Total_weight);
+cfmap.put("customfield_id",customfieldID);
+cfmaplisttotal = List();
+cfmaplisttotal.add(cfmap);
+bsoninv = Map();
+bsoninv.put("customer_id",custID);
+bsoninv.put("line_items",line_items);
+bsoninv.put("custom_fields",cfmaplisttotal);
+data = Map();
+data.put("JSONString",bsoninv);
+info bsoninv;
+urld = "https://inventory.zoho.com/api/v1/invoices/" + invoiceID + "?organization_id=" + organizationID;
+info data;
+resp = invokeurl
+[
+	url :urld
+	type :PUT
+	parameters:data
+	connection:"zilink"
+];
+info resp;
+
